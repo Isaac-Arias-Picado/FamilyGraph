@@ -8,7 +8,7 @@ using SysCol = System.Collections.Generic;
 
 namespace Proyecto_Grafos.Services
 {
-    public class DrawingService
+    public class DrawingService : IDisposable
     {
         private const int NodeWidth = 120;
         private const int NodeHeight = 140;
@@ -16,6 +16,11 @@ namespace Proyecto_Grafos.Services
 
         private readonly SysCol.Dictionary<string, string> _coupleRelationships = new SysCol.Dictionary<string, string>();
         private readonly SysCol.Dictionary<string, Image> _imageCache = new SysCol.Dictionary<string, Image>();
+        private readonly SysCol.Dictionary<Color, SolidBrush> _solidBrushCache = new SysCol.Dictionary<Color, SolidBrush>();
+
+        private readonly Font _nameFont = new Font("Segoe UI", 8, FontStyle.Bold);
+        private readonly Brush _nameBrush = new SolidBrush(Color.White);
+        private readonly Brush _nameBgBrush = new SolidBrush(Color.FromArgb(200, ColorTranslator.FromHtml("#404040")));
 
         public void DrawTree(Graphics g, List<VisualNode> nodes, GraphService graphService)
         {
@@ -117,7 +122,7 @@ namespace Proyecto_Grafos.Services
         {
             foreach (var n in nodes)
             {
-                var person = graphService.GetPerson(n.Name); 
+                var person = graphService.GetPerson(n.Name);
                 DrawNode(g, n, person);
             }
         }
@@ -125,11 +130,9 @@ namespace Proyecto_Grafos.Services
         private void DrawNode(Graphics g, VisualNode node, Person person)
         {
             var rect = new Rectangle(node.X, node.Y, node.Size.Width, node.Size.Height);
-            using (var brush = new SolidBrush(node.Color))
-            {
-                g.FillEllipse(brush, rect);
-                g.DrawEllipse(Pens.Black, rect);
-            }
+            var fillBrush = GetBrushForColor(node.Color);
+            g.FillEllipse(fillBrush, rect);
+            g.DrawEllipse(Pens.Black, rect);
             DrawCircularImage(g, node, person);
             DrawNameBelowNode(g, node, person?.Name ?? node.Name);
         }
@@ -222,18 +225,36 @@ namespace Proyecto_Grafos.Services
 
         private void DrawNameBelowNode(Graphics g, VisualNode node, string name)
         {
-            using (var font = new Font("Segoe UI", 8, FontStyle.Bold))
-            using (var brush = new SolidBrush(Color.White))
-            using (var bg = new SolidBrush(Color.FromArgb(200, ColorTranslator.FromHtml("#404040"))))
-            {
-                var size = g.MeasureString(name, font);
-                float x = node.X + (node.Size.Width - size.Width) / 2;
-                float y = node.Y + node.Size.Height + 2;
-                var bgRect = new RectangleF(x - 2, y - 1, size.Width + 4, size.Height + 2);
-                g.FillRectangle(bg, bgRect);
-                g.DrawRectangle(Pens.LightGray, bgRect.X, bgRect.Y, bgRect.Width, bgRect.Height);
-                g.DrawString(name, font, brush, x, y);
-            }
+            var font = _nameFont;
+            var brush = _nameBrush;
+            var bg = _nameBgBrush;
+
+            var size = g.MeasureString(name, font);
+            float x = node.X + (node.Size.Width - size.Width) / 2;
+            float y = node.Y + node.Size.Height + 2;
+            var bgRect = new RectangleF(x - 2, y - 1, size.Width + 4, size.Height + 2);
+            g.FillRectangle(bg, bgRect);
+            g.DrawRectangle(Pens.LightGray, bgRect.X, bgRect.Y, bgRect.Width, bgRect.Height);
+            g.DrawString(name, font, brush, x, y);
+        }
+
+        private SolidBrush GetBrushForColor(Color c)
+        {
+            if (_solidBrushCache.TryGetValue(c, out var b)) return b;
+            b = new SolidBrush(c);
+            _solidBrushCache[c] = b;
+            return b;
+        }
+
+        public void Dispose()
+        {
+            foreach (var b in _solidBrushCache.Values) b.Dispose();
+            _solidBrushCache.Clear();
+            _nameFont.Dispose();
+            (_nameBrush as IDisposable)?.Dispose();
+            (_nameBgBrush as IDisposable)?.Dispose();
+            foreach (var img in _imageCache.Values) img.Dispose();
+            _imageCache.Clear();
         }
     }
 }
